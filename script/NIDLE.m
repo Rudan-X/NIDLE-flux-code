@@ -1,4 +1,8 @@
-function [new]=NIDLE(model,g_vect,lb,ub,ep,scale,biomass_choose)
+function [new]=NIDLE(model,g_vect,lb,ub,ep,scale,biomass_choose, OutputFlag)
+
+if nargin<8
+    OutputFlag=0;
+end
 
 if strcmp(biomass_choose,'wt')
     biomass=find(contains(model.rxns,'BIOMASS_Ec_iJO1366_WT_53p95M'));
@@ -76,19 +80,44 @@ for cond=1:size(lb,2)
     m.rhs = full([b(:); beq(:)]); % rhs must be dense
     m.lb=lower;
     m.ub=upper;
-    
+
+
     params = struct();
     params.FeasibilityTol=1e-6;
     params.IntFeasTol=1e-3;
+    params.OutputFlag=OutputFlag;
     x = gurobi(m,params);
-
+    %in case of infeasibility try supplying partial solution with higher
+    %feasibility tolerance
+    count=0;
+    while count<50 && strcmp(x.status, 'INFEASIBLE')
+        if count==0
+            disp('Solution at feasTol was not found, Trying again supplying partial solution')
+        end
+        %set maximum feasibility tolerance to epsilon-0.1*epsilon to ensure
+        %0 fluxes will have y=0
+        partparams=params;
+        partparams.FeasibilityTol=ep-0.1*ep;
+        %solve
+        x = gurobi(m, partparams);
+        sol_y=find(x.x(y0:end)==1);
+        %fix 10% of y==1 
+        fix_idx=randsample(sol_y, floor(length(sol_y)/10), false);
+        partsol=m;
+        partsol.lb(y0-1+fix_idx)=1;
+        partsol.ub(y0-1+fix_idx)=1;
+        %run again with initial feasibility tolerance
+        partparams.FeasibilityTol=feasTol;
+        x=gurobi(partsol, partparams);
+        count=count+1;
+    end
     if ~strcmp(x.status,'INFEASIBLE')
         sol=x.x;
         y=sol(y0:end);
 
         %Minimizing sum of fluxes
         Aeq2=[Aeq;zeros(1,n_r), ones(1,n_y)];
-        beq2=[beq;sum(y)-1];
+        beq2=[beq;sum(abs(y-1)<1e-3)];
 
 
         f2=zeros(1,n_r+n_y);
@@ -101,6 +130,22 @@ for cond=1:size(lb,2)
         m.rhs = full([b(:); beq2(:)]); % rhs must be dense
 
         x2 = gurobi(m, params);
+        %In case of infeasibility supply partial solution from previous MILP
+        count=0;
+        while count<50 && strcmp(x2.status, 'INFEASIBLE')
+            if count==0
+                disp('Solution at feasTol was not found, Trying again supplying partial solution')
+            end
+            sol_y=find(x.x(y0:end)==1);
+            %fix 10% of y==1
+            fix_idx=randsample(sol_y, floor(length(sol_y)/10), false);
+            partsol=m;
+            partsol.lb(y0-1+fix_idx)=1;
+            partsol.ub(y0-1+fix_idx)=1;
+            
+            x2=gurobi(partsol, params);
+            count=count+1;
+        end
         if ~strcmp(x2.status,'INFEASIBLE')
             sol_new=x2.x;
             y_new=sol_new(n_r+1:end);
