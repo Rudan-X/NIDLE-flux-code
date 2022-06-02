@@ -65,7 +65,7 @@ res_18B_e10=NIDLE(model_irrev,g_vect_18B,KO_lb,KO_ub,1e-4,scale,'core');
 %_n18A referst to NIDLE-flux at replicate 1 on 18 strains
 %count vector stores statistics of the results
 
-[Kapp_p31,V_p31,count_p31]=getkapp_pfba(abundance,g_vect_31_compres_31_p.flux,conv,1e-4+1e-5);
+[Kapp_p31,V_p31,count_p31]=getkapp_pfba(abundance,g_vect_31_comp, res_31_p.flux,conv,1e-4+1e-5);
 [Kapp_n31,V_n31,count_n31]=getkapp(abundance,g_vect_31_comp,res_31_e10_comp.flux,conv,1e-4+1e-5);
 
 [Kapp_p18A,V_p18,count_p18A]=getkapp_pfba(KOdata_B1,g_vect_18A,res_18_p.flux,conv,1e-4+1e-5);
